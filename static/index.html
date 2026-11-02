@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitAutoHub - Homelab Git & Auto Backup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#f0fdf4', 500: '#22c55e', 600: '#16a34a', 700: '#15803d' },
+            darkbg: '#0f172a',
+            darkcard: '#1e293b',
+            darkborder: '#334155'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="bg-darkbg text-slate-100 min-h-screen flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+
+  <!-- Navbar -->
+  <header class="border-b border-darkborder bg-slate-900/80 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-3 sm:px-6 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-bold text-xl shadow-lg shadow-emerald-500/20">
+          <i class="fa-brands fa-git-alt"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
+            GitAutoHub
+            <span class="text-xs bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-2 py-0.5 rounded-full font-mono">Go Native</span>
+            <span class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">Port 18090</span>
+          </h1>
+          <p class="text-xs text-slate-400">Homelab Git Web UI & Tự Động Sao Lưu • RAM ~10MB</p>
+        </div>
+      </div>
+
+      <!-- System status -->
+      <div class="flex items-center space-x-4">
+        <div id="github-badge" class="hidden sm:flex items-center space-x-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
+          <i class="fa-brands fa-github text-slate-300 text-sm"></i>
+          <span id="github-user-text" class="text-slate-300 font-mono">Đang kiểm tra...</span>
+        </div>
+        <button onclick="refreshAll()" class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition" title="Làm mới">
+          <i class="fa-solid fa-rotate text-sm"></i>
+        </button>
+        <button onclick="openAddModal()" class="flex items-center space-x-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-1.5 rounded-lg shadow-lg shadow-emerald-600/20 transition active:scale-95 text-sm">
+          <i class="fa-solid fa-folder-plus"></i>
+          <span>Thêm Dự Án</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 py-6 sm:px-6 flex-1 w-full space-y-6">
+
+    <!-- Stats Summary Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-darkcard border border-darkborder p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase font-medium">Tổng số Dự Án</p>
+          <p id="stat-total-repos" class="text-2xl font-bold mt-1 text-slate-100">0</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-diagram-project"></i>
+        </div>
+      </div>
+
+      <div class="bg-darkcard border border-darkborder p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase font-medium">Đang Tự Động Theo Dõi</p>
+          <p id="stat-active-watchers" class="text-2xl font-bold mt-1 text-emerald-400">0</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-satellite-dish"></i>
+        </div>
+      </div>
+
+      <div class="bg-darkcard border border-darkborder p-4 rounded-xl flex items-center justify-between">
+        <div>
+          <p class="text-xs text-slate-400 uppercase font-medium">Trạng Thái GitHub Remote</p>
+          <p id="stat-github-status" class="text-sm font-semibold mt-1 text-slate-200">Đang đồng bộ...</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-lg">
+          <i class="fa-brands fa-github"></i>
+        </div>
+      </div>
+    </div>
+
+    <!-- Repositories Section -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2">
+          <i class="fa-regular fa-folder-open text-emerald-400"></i>
+          Danh Sách Dự Án / Thư Mục
+        </h2>
+        <button onclick="toggleLogsDrawer()" class="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-list-check"></i>
+          <span>Xem Nhật ký sao lưu (<span id="logs-count">0</span>)</span>
+        </button>
+      </div>
+
+      <!-- Repo Cards Grid -->
+      <div id="repo-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Rendered by JS -->
+      </div>
+
+      <!-- Empty State -->
+      <div id="empty-state" class="hidden text-center py-16 bg-darkcard border border-dashed border-darkborder rounded-2xl p-6">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-slate-800 text-slate-500 flex items-center justify-center text-3xl">
+          <i class="fa-solid fa-folder-plus"></i>
+        </div>
+        <h3 class="text-base font-medium text-slate-300">Chưa có dự án nào được theo dõi</h3>
+        <p class="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-5">Thêm thư mục code hoặc dữ liệu trên máy homelab của bạn để bắt đầu tự động sao lưu lên GitHub.</p>
+        <button onclick="openAddModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition">
+          <i class="fa-solid fa-plus mr-1"></i> Thêm dự án đầu tiên
+        </button>
+      </div>
+    </div>
+
+    <!-- Logs Drawer / Panel -->
+    <div id="logs-drawer" class="hidden bg-darkcard border border-darkborder rounded-xl p-5 space-y-3">
+      <div class="flex items-center justify-between border-b border-darkborder pb-3">
+        <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left text-slate-400"></i>
+          Nhật Ký Tự Động Sao Lưu Gần Đây
+        </h3>
+        <button onclick="toggleLogsDrawer()" class="text-slate-400 hover:text-white text-xs">
+          <i class="fa-solid fa-xmark"></i> Đóng
+        </button>
+      </div>
+      <div id="logs-list" class="max-h-72 overflow-y-auto space-y-2 text-xs font-mono">
+        <!-- Logs injected here -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-darkborder py-4 text-center text-xs text-slate-500">
+    Homelab GitAutoHub • Truy cập mạng nội bộ qua cổng 18090 • Tailscale: <span class="text-slate-400">100.100.1.3:18090</span>
+  </footer>
+
+  <!-- MODAL: ADD REPO -->
+  <div id="modal-add" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-darkcard border border-darkborder rounded-2xl max-w-xl w-full p-6 space-y-5 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-darkborder pb-3">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-folder-plus text-emerald-400"></i>
+          Thêm Dự Án / Thư Mục Cần Quản Lý
+        </h3>
+        <button onclick="closeAddModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Đường dẫn thư mục trên máy homelab</label>
+          <div class="flex gap-2">
+            <input id="add-path" type="text" placeholder="/home/giang3dlab/ESP32" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 font-mono text-xs">
+            <button onclick="toggleBrowser()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-lg text-slate-300 flex items-center gap-1.5 transition whitespace-nowrap">
+              <i class="fa-regular fa-folder"></i> Duyệt
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline Folder Browser -->
+        <div id="folder-browser" class="hidden bg-slate-900 border border-slate-700 rounded-lg p-3 space-y-2">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 pb-1 border-b border-slate-800">
+            <span class="truncate font-mono" id="browser-current-path">/home/giang3dlab</span>
+            <button onclick="browserUp()" class="hover:text-emerald-400 flex items-center gap-1">
+              <i class="fa-solid fa-arrow-up"></i> Lên thư mục cha
+            </button>
+          </div>
+          <div id="browser-items" class="max-h-40 overflow-y-auto space-y-1">
+            <!-- Directory list -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Tên dự án (Gợi nhớ)</label>
+          <input id="add-name" type="text" placeholder="Để trống sẽ tự lấy tên thư mục" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 text-xs">
+        </div>
+
+        <!-- Options -->
+        <div class="bg-slate-900/60 border border-slate-800 p-3.5 rounded-xl space-y-3">
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input id="add-init-git" type="checkbox" checked class="rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0">
+            <span class="text-slate-300">Tự động khởi tạo Git (`git init`) nếu thư mục chưa có Git</span>
+          </label>
+
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input id="add-create-gh" type="checkbox" checked class="rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0">
+            <span class="text-slate-300">Tự động tạo Repository trên GitHub và đẩy code lên ngay</span>
+          </label>
+
+          <div id="gh-options" class="pl-6 space-y-2 pt-1">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="gh-vis" id="add-gh-private" value="private" checked class="text-emerald-500 focus:ring-0">
+              <span class="text-slate-400">Riêng tư (Private Repository - Khuyên dùng)</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="radio" name="gh-vis" id="add-gh-public" value="public" class="text-emerald-500 focus:ring-0">
+              <span class="text-slate-400">Công khai (Public Repository)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Auto Backup Settings -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Chế độ tự động sao lưu</label>
+            <select id="add-mode" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 text-xs">
+              <option value="both" selected>Cả hai (Khi đổi file + Định kỳ)</option>
+              <option value="change">Chỉ khi có file chỉnh sửa</option>
+              <option value="interval">Chỉ theo chu kỳ thời gian</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Chu kỳ định kỳ</label>
+            <select id="add-interval" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 text-xs">
+              <option value="1">Mỗi 1 phút</option>
+              <option value="5" selected>Mỗi 5 phút</option>
+              <option value="15">Mỗi 15 phút</option>
+              <option value="30">Mỗi 30 phút</option>
+              <option value="60">Mỗi 1 giờ</option>
+              <option value="1440">Mỗi 1 ngày</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-3 pt-3 border-t border-darkborder">
+        <button onclick="closeAddModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs transition">Hủy</button>
+        <button id="btn-submit-add" onclick="submitAddRepo()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg text-xs shadow-lg shadow-emerald-600/20 transition flex items-center gap-2">
+          <span>Tạo & Bắt đầu sao lưu</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DIFF & STATUS -->
+  <div id="modal-diff" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-darkcard border border-darkborder rounded-2xl max-w-3xl w-full p-6 space-y-4 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between border-b border-darkborder pb-3">
+        <div>
+          <h3 id="diff-title" class="text-base font-bold text-white">Chi tiết thay đổi</h3>
+          <p id="diff-path" class="text-xs text-slate-400 font-mono"></p>
+        </div>
+        <button onclick="closeDiffModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <!-- File list changed -->
+      <div class="text-xs">
+        <p class="font-medium text-slate-300 mb-2">Các file có sự thay đổi:</p>
+        <div id="diff-file-list" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+          <!-- files badges -->
+        </div>
+      </div>
+
+      <!-- Diff code viewer -->
+      <div class="flex-1 overflow-hidden flex flex-col bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs">
+        <div class="text-slate-400 text-[11px] pb-1 border-b border-slate-800 flex justify-between">
+          <span>Git Diff Preview</span>
+          <span id="diff-char-count">0 bytes</span>
+        </div>
+        <pre id="diff-content" class="flex-1 overflow-auto pt-2 text-slate-300 whitespace-pre leading-relaxed select-text"></pre>
+      </div>
+
+      <!-- Manual commit message input & Discard -->
+      <div class="flex gap-2">
+        <input id="manual-commit-msg" type="text" placeholder="Nhập ghi chú sao lưu (tùy chọn)..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-xs focus:outline-none focus:border-emerald-500">
+        <button id="btn-discard" onclick="triggerDiscard()" class="bg-rose-950/70 hover:bg-rose-900 border border-rose-800/60 text-rose-300 font-medium px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition" title="Hủy bỏ mọi thay đổi nháp, đưa file về trạng thái sạch sẽ">
+          <i class="fa-solid fa-trash-arrow-up"></i>
+          <span>Bỏ thay đổi (Discard)</span>
+        </button>
+        <button id="btn-manual-commit" onclick="submitManualCommit()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Sao lưu & Đẩy lên GitHub</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: COMMITS HISTORY -->
+  <div id="modal-commits" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-darkcard border border-darkborder rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="flex items-center justify-between border-b border-darkborder pb-3">
+        <div>
+          <h3 id="commits-title" class="text-base font-bold text-white">Lịch sử Commit</h3>
+          <p id="commits-path" class="text-xs text-slate-400 font-mono"></p>
+        </div>
+        <button onclick="closeCommitsModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div id="commits-list" class="flex-1 overflow-y-auto space-y-2.5 text-xs font-mono">
+        <!-- Commits -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-800 border border-slate-700 px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 text-xs">
+    <div id="toast-icon"></div>
+    <div id="toast-msg" class="text-slate-200 font-medium"></div>
+  </div>
+
+  <!-- Javascript Logic -->
+  <script>
+    let activeDiffRepoId = null;
+    let browserCurrentDir = '/home/giang3dlab';
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const msg = document.getElementById('toast-msg');
+
+      if (type === 'success') {
+        icon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>';
+      } else {
+        icon.innerHTML = '<i class="fa-solid fa-circle-exclamation text-rose-400 text-base"></i>';
+      }
+      msg.textContent = message;
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        
+        if (data.github_connected && data.github_user) {
+          document.getElementById('github-user-text').textContent = data.github_user.login;
+          document.getElementById('stat-github-status').innerHTML = `<span class="text-emerald-400">Đã kết nối: ${data.github_user.login}</span>`;
+        } else {
+          document.getElementById('github-user-text').textContent = 'Chưa liên kết';
+          document.getElementById('stat-github-status').innerHTML = `<span class="text-amber-400">Chưa đăng nhập GitHub</span>`;
+        }
+        document.getElementById('stat-active-watchers').textContent = data.active_watchers;
+        document.getElementById('stat-total-repos').textContent = data.total_repos;
+      } catch (e) {
+        console.error("loadStatus error:", e);
+      }
+    }
+
+    async function loadRepos() {
+      try {
+        const res = await fetch('/api/repos');
+        const repos = await res.json();
+
+        const grid = document.getElementById('repo-grid');
+        const emptyState = document.getElementById('empty-state');
+
+        if (!repos || repos.length === 0) {
+          grid.innerHTML = '';
+          emptyState.classList.remove('hidden');
+          return;
+        }
+
+        emptyState.classList.add('hidden');
+        grid.innerHTML = repos.map(r => renderRepoCard(r)).join('');
+      } catch (e) {
+        console.error("loadRepos error:", e);
+      }
+    }
+
+    function renderRepoCard(r) {
+      const isAuto = r.auto_backup_enabled;
+      const isClean = r.uncommitted_count === 0;
+      const uncommitted = r.uncommitted_count;
+
+      const remoteBadge = r.remote_url 
+        ? `<a href="${r.remote_url.replace('.git','')}" target="_blank" class="text-slate-400 hover:text-emerald-400 flex items-center gap-1 transition text-[11px]" title="${r.remote_url}">
+             <i class="fa-brands fa-github"></i> <span class="truncate max-w-[120px]">GitHub</span> <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+           </a>`
+        : `<span class="text-slate-500 text-[11px]"><i class="fa-solid fa-hard-drive"></i> Local only</span>`;
+
+      return `
+        <div class="bg-darkcard border border-darkborder rounded-2xl p-5 space-y-4 hover:border-slate-600 transition shadow-lg flex flex-col justify-between">
+          <div>
+            <!-- Header -->
+            <div class="flex items-start justify-between gap-2">
+              <div class="overflow-hidden">
+                <h3 class="font-bold text-slate-100 text-base truncate flex items-center gap-2" title="${r.name}">
+                  ${r.name}
+                  <span class="text-[10px] bg-slate-800 text-slate-300 font-mono px-2 py-0.5 rounded border border-slate-700 font-normal">
+                    <i class="fa-solid fa-code-branch text-emerald-400 mr-1"></i>${r.branch || 'main'}
+                  </span>
+                </h3>
+                <p class="text-[11px] text-slate-400 font-mono truncate mt-0.5" title="${r.path}">${r.path}</p>
+              </div>
+              <div>${remoteBadge}</div>
+            </div>
+
+            <!-- Status Pill -->
+            <div class="mt-3 flex items-center justify-between bg-slate-900/60 border border-slate-800/80 px-3 py-2 rounded-xl text-xs">
+              <div class="flex items-center gap-2">
+                <span class="relative flex h-2.5 w-2.5">
+                  ${!isClean ? '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>' : ''}
+                  <span class="relative inline-flex rounded-full h-2.5 w-2.5 ${isClean ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+                </span>
+                <span class="${isClean ? 'text-slate-300' : 'text-amber-300 font-medium'}">
+                  ${isClean ? 'Đã đồng bộ sạch sẽ' : `${uncommitted} file chưa sao lưu`}
+                </span>
+              </div>
+              <button onclick="openDiffModal('${r.id}', '${r.name}', '${r.path}')" class="text-[11px] text-emerald-400 hover:underline">
+                Xem thay đổi
+              </button>
+            </div>
+
+            <!-- Last backup & commit info -->
+            <div class="mt-3 space-y-1 text-[11px] text-slate-400">
+              <div class="flex justify-between">
+                <span>Lần sao lưu gần nhất:</span>
+                <span class="text-slate-300 font-mono">${r.last_backup || 'Chưa sao lưu'}</span>
+              </div>
+              ${r.last_commit ? `
+                <div class="flex justify-between truncate" title="${r.last_commit.message}">
+                  <span>Commit gần nhất:</span>
+                  <span class="text-slate-300 font-mono truncate max-w-[150px]">${r.last_commit.message}</span>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Auto backup toggle & settings -->
+            <div class="mt-4 pt-3 border-t border-darkborder/60 space-y-2.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-300 font-medium">Tự động sao lưu</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" ${isAuto ? 'checked' : ''} onchange="toggleAutoBackup('${r.id}', this.checked)" class="sr-only peer">
+                  <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <label class="text-slate-400 block mb-0.5">Chế độ</label>
+                  <select onchange="updateRepoMode('${r.id}', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                    <option value="both" ${r.mode === 'both' ? 'selected' : ''}>Cả 2</option>
+                    <option value="change" ${r.mode === 'change' ? 'selected' : ''}>Khi đổi file</option>
+                    <option value="interval" ${r.mode === 'interval' ? 'selected' : ''}>Theo chu kỳ</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-slate-400 block mb-0.5">Chu kỳ</label>
+                  <select onchange="updateRepoInterval('${r.id}', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200">
+                    <option value="1" ${r.interval_minutes == 1 ? 'selected' : ''}>1 phút</option>
+                    <option value="5" ${r.interval_minutes == 5 ? 'selected' : ''}>5 phút</option>
+                    <option value="15" ${r.interval_minutes == 15 ? 'selected' : ''}>15 phút</option>
+                    <option value="30" ${r.interval_minutes == 30 ? 'selected' : ''}>30 phút</option>
+                    <option value="60" ${r.interval_minutes == 60 ? 'selected' : ''}>1 giờ</option>
+                    <option value="1440" ${r.interval_minutes == 1440 ? 'selected' : ''}>1 ngày</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="pt-3 border-t border-darkborder flex items-center justify-between gap-1 text-xs">
+            <button onclick="manualBackup('${r.id}')" class="flex-1 bg-emerald-600/90 hover:bg-emerald-500 text-white font-medium py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition active:scale-95 shadow">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>Sao lưu ngay</span>
+            </button>
+            <button onclick="pullRepo('${r.id}')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-2.5 rounded-lg transition" title="Kéo code mới nhất từ GitHub">
+              <i class="fa-solid fa-cloud-arrow-down"></i>
+            </button>
+            <button onclick="openCommitsModal('${r.id}', '${r.name}', '${r.path}')" class="bg-slate-800 hover:bg-slate-700 text-slate-300 py-1.5 px-2.5 rounded-lg transition" title="Lịch sử Commit">
+              <i class="fa-solid fa-history"></i>
+            </button>
+            <button onclick="deleteRepo('${r.id}', '${r.name}')" class="bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 py-1.5 px-2.5 rounded-lg transition" title="Xóa khỏi danh sách quản lý">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function toggleAutoBackup(repoId, enabled) {
+      const res = await fetch('/api/repos');
+      const repos = await res.json();
+      const r = repos.find(x => x.id === repoId);
+      if (!r) return;
+
+      await fetch(`/api/repos/${repoId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auto_backup_enabled: enabled,
+          mode: r.mode,
+          interval_minutes: r.interval_minutes,
+          auto_push: r.auto_push
+        })
+      });
+      showToast(enabled ? 'Đã bật tự động sao lưu' : 'Đã tạm dừng tự động sao lưu');
+      loadStatus();
+    }
+
+    async function updateRepoMode(repoId, mode) {
+      const res = await fetch('/api/repos');
+      const repos = await res.json();
+      const r = repos.find(x => x.id === repoId);
+      if (!r) return;
+
+      await fetch(`/api/repos/${repoId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auto_backup_enabled: r.auto_backup_enabled,
+          mode: mode,
+          interval_minutes: r.interval_minutes,
+          auto_push: r.auto_push
+        })
+      });
+      showToast('Đã cập nhật chế độ');
+    }
+
+    async function updateRepoInterval(repoId, interval) {
+      const res = await fetch('/api/repos');
+      const repos = await res.json();
+      const r = repos.find(x => x.id === repoId);
+      if (!r) return;
+
+      await fetch(`/api/repos/${repoId}/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auto_backup_enabled: r.auto_backup_enabled,
+          mode: r.mode,
+          interval_minutes: parseInt(interval),
+          auto_push: r.auto_push
+        })
+      });
+      showToast(`Đã đổi chu kỳ sang mỗi ${interval} phút`);
+    }
+
+    async function manualBackup(repoId) {
+      showToast('Đang tiến hành gom file và đẩy lên GitHub...', 'success');
+      try {
+        const res = await fetch(`/api/repos/${repoId}/backup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Sao lưu hoàn tất: ${data.message}`);
+        } else {
+          showToast(`Lỗi: ${data.message}`, 'error');
+        }
+        refreshAll();
+      } catch (e) {
+        showToast('Có lỗi xảy ra khi sao lưu', 'error');
+      }
+    }
+
+    async function pullRepo(repoId) {
+      showToast('Đang đồng bộ code từ GitHub về...', 'success');
+      try {
+        const res = await fetch(`/api/repos/${repoId}/pull`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Đồng bộ thành công!`);
+        } else {
+          showToast(`Lỗi pull: ${data.message}`, 'error');
+        }
+        refreshAll();
+      } catch (e) {
+        showToast('Lỗi kết nối GitHub', 'error');
+      }
+    }
+
+    async function deleteRepo(repoId, name) {
+      if (!confirm(`Bạn có chắc muốn xóa dự án "${name}" khỏi GitAutoHub?\n(File thực tế trên ổ cứng homelab vẫn được giữ nguyên an toàn)`)) {
+        return;
+      }
+      try {
+        await fetch(`/api/repos/${repoId}`, { method: 'DELETE' });
+        showToast(`Đã xóa "${name}" khỏi danh sách theo dõi`);
+        refreshAll();
+      } catch (e) {
+        showToast('Không thể xóa dự án', 'error');
+      }
+    }
+
+    // DIFF MODAL
+    async function openDiffModal(repoId, name, path) {
+      activeDiffRepoId = repoId;
+      document.getElementById('diff-title').textContent = `Chi tiết thay đổi: ${name}`;
+      document.getElementById('diff-path').textContent = path;
+      document.getElementById('manual-commit-msg').value = '';
+
+      const listContainer = document.getElementById('diff-file-list');
+      const content = document.getElementById('diff-content');
+      listContainer.innerHTML = '<span class="text-slate-500">Đang tải...</span>';
+      content.textContent = 'Đang phân tích thay đổi...';
+
+      document.getElementById('modal-diff').classList.remove('hidden');
+
+      try {
+        const res = await fetch(`/api/repos/${repoId}/status_details`);
+        const data = await res.json();
+
+        if (data.files.length === 0) {
+          listContainer.innerHTML = '<span class="text-emerald-400">Không có file nào bị sửa đổi (Sạch sẽ)</span>';
+          content.textContent = '// Không có thay đổi nào giữa thư mục hiện tại và Git HEAD.';
+        } else {
+          listContainer.innerHTML = data.files.map(f => `
+            <span class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-[11px] flex items-center gap-1">
+              <span class="text-amber-400 font-bold">${f.status}</span> ${f.file}
+            </span>
+          `).join('');
+          content.textContent = data.diff || '// Chỉ có file mới (untracked) hoặc thay đổi nhị phân.';
+        }
+        document.getElementById('diff-char-count').textContent = `${(data.diff || '').length} ký tự`;
+      } catch (e) {
+        content.textContent = 'Lỗi khi tải diff: ' + e;
+      }
+    }
+
+    function closeDiffModal() {
+      document.getElementById('modal-diff').classList.add('hidden');
+      activeDiffRepoId = null;
+    }
+
+    async function submitManualCommit() {
+      if (!activeDiffRepoId) return;
+      const msg = document.getElementById('manual-commit-msg').value.trim();
+      const btn = document.getElementById('btn-manual-commit');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang sao lưu...';
+
+      try {
+        const res = await fetch(`/api/repos/${activeDiffRepoId}/backup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg || null, push_to_remote: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Sao lưu thành công!`);
+          closeDiffModal();
+          refreshAll();
+        } else {
+          showToast(`Lỗi: ${data.message}`, 'error');
+        }
+      } catch (e) {
+        showToast('Lỗi khi sao lưu', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i><span>Sao lưu & Đẩy lên GitHub</span>';
+      }
+    }
+
+    // COMMITS MODAL
+    async function openCommitsModal(repoId, name, path) {
+      document.getElementById('commits-title').textContent = `Lịch sử Commit: ${name}`;
+      document.getElementById('commits-path').textContent = path;
+      const list = document.getElementById('commits-list');
+      list.innerHTML = '<p class="text-slate-500 text-center py-4">Đang tải lịch sử...</p>';
+      document.getElementById('modal-commits').classList.remove('hidden');
+
+      try {
+        const res = await fetch(`/api/repos/${repoId}/commits`);
+        const commits = await res.json();
+
+        if (commits.length === 0) {
+          list.innerHTML = '<p class="text-slate-500 text-center py-4">Chưa có commit nào.</p>';
+          return;
+        }
+
+        list.innerHTML = commits.map(c => `
+          <div class="bg-slate-900 border border-slate-800 p-3 rounded-xl flex items-center justify-between gap-3 hover:border-slate-700 transition">
+            <div class="space-y-1 overflow-hidden flex-1">
+              <p class="text-slate-200 font-medium truncate" title="${c.message}">${c.message}</p>
+              <div class="flex items-center gap-2 text-[11px] text-slate-500">
+                <span><i class="fa-solid fa-user text-slate-600 mr-1"></i>${c.author}</span>
+                <span>•</span>
+                <span><i class="fa-regular fa-clock text-slate-600 mr-1"></i>${c.relative}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="bg-slate-800 text-emerald-400 font-mono text-[11px] px-2 py-0.5 rounded border border-slate-700 whitespace-nowrap">
+                ${c.hash}
+              </span>
+              <button onclick="triggerRollback('${repoId}', '${c.hash}', '${c.message.replace(/'/g, "\\'")}')" class="bg-amber-500/10 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs font-sans flex items-center gap-1.5 transition active:scale-95 whitespace-nowrap" title="Khôi phục mã nguồn về mốc commit này">
+                <i class="fa-solid fa-rotate-left"></i>
+                <span>Khôi phục</span>
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        list.innerHTML = '<p class="text-rose-400 text-center py-4">Lỗi tải commits</p>';
+      }
+    }
+
+    async function triggerRollback(repoId, commitHash, message) {
+      if (!confirm(`XÁC NHẬN KHÔI PHỤC (1-CLICK RESTORE):\n\nBạn có chắc muốn khôi phục toàn bộ dự án về mốc commit [${commitHash}]?\n"${message}"\n\nHệ thống sẽ tự động đưa code trên máy về trạng thái này và đồng bộ lên GitHub.`)) {
+        return;
+      }
+      showToast(`Đang khôi phục về bản commit [${commitHash}]...`);
+      try {
+        const res = await fetch(`/api/repos/${repoId}/rollback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ commit_hash: commitHash })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`Khôi phục thành công về bản [${commitHash}]!`);
+          closeCommitsModal();
+          refreshAll();
+        } else {
+          showToast(`Lỗi: ${data.message}`, 'error');
+        }
+      } catch (e) {
+        showToast('Lỗi khi thực hiện khôi phục', 'error');
+      }
+    }
+
+    async function triggerDiscard() {
+      if (!activeDiffRepoId) return;
+      if (!confirm("BẠN CÓ CHẮC KHÔNG?\n\nThao tác này sẽ HỦY BỎ TOÀN BỘ các thay đổi chưa lưu trên máy và đưa code về nguyên bản của lần commit gần nhất.")) {
+        return;
+      }
+      showToast('Đang hủy bỏ các thay đổi nháp...');
+      try {
+        const res = await fetch(`/api/repos/${activeDiffRepoId}/discard`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Đã đưa code về trạng thái sạch sẽ!');
+          closeDiffModal();
+          refreshAll();
+        } else {
+          showToast(`Lỗi: ${data.message}`, 'error');
+        }
+      } catch (e) {
+        showToast('Lỗi khi hủy thay đổi', 'error');
+      }
+    }
+
+    function closeCommitsModal() {
+      document.getElementById('modal-commits').classList.add('hidden');
+    }
+
+    // ADD MODAL & FOLDER BROWSER
+    function openAddModal() {
+      document.getElementById('modal-add').classList.remove('hidden');
+      loadBrowseDir('/home/giang3dlab');
+    }
+
+    function closeAddModal() {
+      document.getElementById('modal-add').classList.add('hidden');
+      document.getElementById('folder-browser').classList.add('hidden');
+    }
+
+    function toggleBrowser() {
+      const b = document.getElementById('folder-browser');
+      b.classList.toggle('hidden');
+    }
+
+    async function loadBrowseDir(path) {
+      try {
+        const res = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
+        const data = await res.json();
+        browserCurrentDir = data.current_path;
+        document.getElementById('browser-current-path').textContent = browserCurrentDir;
+
+        const container = document.getElementById('browser-items');
+        if (data.items.length === 0) {
+          container.innerHTML = '<p class="text-slate-600 text-center py-2">Thư mục trống</p>';
+          return;
+        }
+
+        container.innerHTML = data.items.map(it => `
+          <div class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-slate-800 cursor-pointer group text-slate-300" onclick="selectBrowseDir('${it.path}')">
+            <div class="flex items-center gap-2 truncate">
+              <i class="fa-regular fa-folder text-amber-400"></i>
+              <span class="truncate">${it.name}</span>
+              ${it.is_git ? '<span class="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-1 rounded">Git</span>' : ''}
+            </div>
+            <button onclick="event.stopPropagation(); loadBrowseDir('${it.path}')" class="text-slate-500 hover:text-white px-2 py-0.5 rounded text-[11px]">
+              Mở <i class="fa-solid fa-chevron-right text-[9px]"></i>
+            </button>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error("loadBrowseDir error:", e);
+      }
+    }
+
+    function selectBrowseDir(path) {
+      document.getElementById('add-path').value = path;
+      const parts = path.split('/').filter(Boolean);
+      document.getElementById('add-name').value = parts[parts.length - 1] || 'project';
+      document.getElementById('folder-browser').classList.add('hidden');
+    }
+
+    function browserUp() {
+      const parts = browserCurrentDir.split('/').filter(Boolean);
+      if (parts.length > 1) {
+        parts.pop();
+        loadBrowseDir('/' + parts.join('/'));
+      }
+    }
+
+    async function submitAddRepo() {
+      const path = document.getElementById('add-path').value.trim();
+      const name = document.getElementById('add-name').value.trim();
+      const initGit = document.getElementById('add-init-git').checked;
+      const createGh = document.getElementById('add-create-gh').checked;
+      const isPrivate = document.getElementById('add-gh-private').checked;
+      const mode = document.getElementById('add-mode').value;
+      const interval = parseInt(document.getElementById('add-interval').value);
+
+      if (!path) {
+        showToast('Vui lòng nhập đường dẫn thư mục', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-add');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang khởi tạo...';
+
+      try {
+        const res = await fetch('/api/repos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: path,
+            name: name || null,
+            init_git: initGit,
+            create_github: createGh,
+            is_private: isPrivate,
+            interval_minutes: interval,
+            mode: mode,
+            auto_backup: true,
+            auto_push: true
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Đã thêm dự án "${data.repo.name}" thành công!`);
+          closeAddModal();
+          refreshAll();
+        } else {
+          showToast(`Lỗi: ${data.detail || data.error}`, 'error');
+        }
+      } catch (e) {
+        showToast('Lỗi khi thêm dự án', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Tạo & Bắt đầu sao lưu</span>';
+      }
+    }
+
+    // LOGS
+    async function loadLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const logs = await res.json();
+        document.getElementById('logs-count').textContent = logs.length;
+
+        const list = document.getElementById('logs-list');
+        if (logs.length === 0) {
+          list.innerHTML = '<p class="text-slate-500 py-2">Chưa có nhật ký nào</p>';
+          return;
+        }
+
+        list.innerHTML = logs.map(l => {
+          const isSuccess = l.status === 'success';
+          return `
+            <div class="p-2 rounded bg-slate-900 border border-slate-800 flex items-start justify-between gap-2">
+              <div class="space-y-0.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] ${isSuccess ? 'text-emerald-400' : 'text-rose-400'} font-bold uppercase">${l.status}</span>
+                  <span class="text-slate-300 font-semibold">${l.repo_name}</span>
+                  <span class="text-[10px] text-slate-500 bg-slate-800 px-1 rounded">${l.action}</span>
+                </div>
+                <p class="text-slate-400 text-[11px]">${l.message}</p>
+              </div>
+              <span class="text-slate-500 text-[10px] whitespace-nowrap">${l.timestamp}</span>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error("loadLogs error:", e);
+      }
+    }
+
+    function toggleLogsDrawer() {
+      const d = document.getElementById('logs-drawer');
+      d.classList.toggle('hidden');
+      if (!d.classList.contains('hidden')) {
+        loadLogs();
+      }
+    }
+
+    function refreshAll() {
+      loadStatus();
+      loadRepos();
+      loadLogs();
+    }
+
+    // Initial load & Polling every 10 seconds
+    refreshAll();
+    setInterval(refreshAll, 10000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Binaries
+git-webui
+git-webui.exe
+dist/
+
+# Local User Configurations & State
+config.json
+
+# OS files
+.DS_Store
+Thumbs.db
